@@ -1,0 +1,36 @@
+# tasks for Red Hat Familly
+---
+- name: installs policycoreutils-python
+  package:
+    name: policycoreutils-python
+    state: present
+
+- name: allow mysql to start (SELinux)
+  selinux_permissive:
+    name: mysqld_t
+    permissive: true
+  when: ansible_selinux.status == "enabled"
+
+- block:
+  - name: installs repository
+    yum:
+      name: "{{xtradb_repo_url}}"
+      state: present
+  
+  - name: configures repositories
+    command: percona-release enable original
+    register: result
+    failed_when: 
+      - result.stderr != ""
+      - "'All done' not in result.stderr"
+    changed_when: result.stderr == ""
+
+  when: percona_rhsm_repository is not defined
+
+- name: enable repository
+  rhsm_repository:
+    name: "{{ percona_rhsm_repository }}"
+    state: enabled
+  when: percona_rhsm_repository is defined
+
+...

@@ -1,0 +1,84 @@
+---
+- name: Create the databases
+  mysql_db:
+    name: "{{ item.name }}"
+    login_user: "{{ xtradb_root_user }}"
+    login_password: "{{ xtradb_root_password }}"
+    state: present
+  with_items: "{{ xtradb_databases }}"
+  register: _db
+
+- name: Copy database init files
+  copy:
+    src: "{{ item.1 }}"
+    dest: "/tmp/{{ item.1 | basename }}"
+    mode: "0600"
+  loop: "{{ _db.results | subelements('item.init_files') }}"
+  when:
+    - item.0.changed
+    - item.1 is defined
+
+- name: Copy database init templates
+  template:
+    src: "{{ item.1 }}"
+    dest: "/tmp/{{ item.1 | basename }}"
+    mode: "0600"
+  loop: "{{ _db.results | subelements('item.init_templates') }}"
+  when:
+    - item.0.changed
+    - item.1 is defined
+
+- name: Initialise databases files
+  mysql_db:
+    name: "{{ item.0.item.name }}"
+    state: import
+    target: "/tmp/{{ item.1 | basename }}"
+    login_user: "{{ xtradb_root_user }}"
+    login_password: "{{ xtradb_root_password }}"
+  loop: "{{ _db.results | subelements('item.init_files') }}"
+  when:
+    - item.0.changed
+    - item.1 is defined
+
+- name: Initialise databases templates
+  mysql_db:
+    name: "{{ item.0.item.name }}"
+    state: import
+    target: "/tmp/{{ item.1 | basename }}"
+    login_user: "{{ xtradb_root_user }}"
+    login_password: "{{ xtradb_root_password }}"
+  loop: "{{ _db.results | subelements('item.init_templates') }}"
+  when:
+    - item.0.changed
+    - item.1 is defined
+
+- name: Delete init files from the server
+  file:
+    name: "/tmp/{{ item.1 | basename }}"
+    state: absent
+  loop: "{{ _db.results | subelements('item.init_files') }}"
+  when:
+    - item.0.changed
+    - item.1 is defined
+
+- name: Delete init templates from the server
+  file:
+    name: "/tmp/{{ item.1 | basename }}"
+    state: absent
+  loop: "{{ _db.results | subelements('item.init_templates') }}"
+  when:
+    - item.0.changed
+    - item.1 is defined
+
+- name: Create the users
+  mysql_user:
+    name: "{{ item.name }}"
+    password: "{{ item.password | default(omit) }}"
+    host: "{{ item.host | default('localhost') }}"
+    priv: "{{ item.priv }}"
+    append_privs: "{{ item.append_privs | default(omit) }}"
+    login_user: root
+    login_password: "{{ xtradb_root_password }}"
+    state: present
+  with_items: "{{ xtradb_users }}"
+...
